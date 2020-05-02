@@ -360,6 +360,12 @@ public:
                                 bool canSolve = isCase2b1 || isCase2b2 || isCase2b3;
                                 if (!canSolve) {
                                     // Any of the remaining 5 dispositions: case already covered in 2a. Go to next index 2.
+                                    
+                                    // XXX in this implementation, we consider shooting one ball at a time, so the order
+                                    // of shooting matters, otherwise some groups could elide too early. However, it seems
+                                    // that the accepted solution consider shooting all the balls altogether. That is, the
+                                    // following string RRWWRRBBWW can be erased by shooting simultaneously W and B.
+                                    // To make it work in LeetCode, simply comment the following line.
                                     continue;
                                 }
 
