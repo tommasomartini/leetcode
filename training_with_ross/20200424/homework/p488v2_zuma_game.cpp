@@ -55,7 +55,7 @@ char colorToChar(Color c) {
 }
 
 void printHand(vector<int>& hand) {
-    cout << "hand=[";
+    cout << "[";
     cout << "R=" << hand[0] << ", ";
     cout << "Y=" << hand[1] << ", ";
     cout << "B=" << hand[2] << ", ";
@@ -63,18 +63,25 @@ void printHand(vector<int>& hand) {
     cout << "W=" << hand[4] << "]" << endl;
 }
 
-void printBoard(vector<Group>& board) {
-    string row1 = "board [ ";
-    string row2 = "      [ ";
-    for (auto& g: board) {
-        row1.push_back(colorToChar(g.c));
-        row1 += " ";
-        row2 += to_string(g.n) + " ";
+string boardToString(vector<Group>& board, int lo, int hi) {
+    string row = "[ ";
+    Group g;
+    for (int i = lo; i <= hi; ++i) {
+        g = board[i];
+        row += to_string(g.n);
+        row.push_back(colorToChar(g.c));
+        row += " ";
     }
-    row1 += "]";
-    row2 += "]";
-    cout << row1 << endl;
-    cout << row2 << endl;
+    row += "]";
+    return row;
+}
+
+string solutionToString(vector<int>& solution) {
+    string row = to_string(solution[0]);
+    for (int i = 1; i < 5; ++i) {
+        row += " " + to_string(solution[i]);
+    }
+    return row;
 }
 
 bool validateSolution(vector<int>& solution, vector<int>& hand) {
@@ -95,7 +102,11 @@ public:
         for (char& c: hand) {
             ++_hand[charToColor(c)];
         }
+
+#ifdef DEBUG
+        cout << "Hand" << endl;
         printHand(_hand);
+#endif
 
         // Fill the board.
         char currColor;
@@ -109,7 +120,10 @@ public:
             _board.push_back(group);
             i = j; 
         }
-        printBoard(_board);
+
+#ifdef DEBUG
+        cout << "Board: " << boardToString(_board, 0, _board.size() - 1) << endl;
+#endif
 
         // Fill the color map: for each color, stores the indices of the 
         // relative groups.
@@ -216,115 +230,183 @@ public:
                 loGroup = _board[lo];
                 hiGroup = _board[hi];
 #ifdef DEBUG
-                string row1 = " [ ";
-                string row2 = " [ ";
-                for (int k = lo; k <= hi; ++k) {
-                    row1.push_back(colorToChar(_board[k].c));
-                    row1 += " ";
-                    row2 += to_string(_board[k].n) + " ";
-                }
-                cout << row1 << "]" << endl;
-                cout << row2 << "]" << endl;
+                cout << boardToString(_board, lo, hi) << endl;
 #endif
 
                 // Match the rightmost group with all the groups in the current
                 // subsequence with the same color.
                 Color& currColor = hiGroup.c;
                 vector<int>& currColorIndices = colorIndices[currColor];
-                for (int cIdx : currColorIndices) {
-#ifdef DEBUG
-                    cout << "  cIdx: " << cIdx;
-#endif
-                    if (cIdx < lo) {
-                        // This group is outside the subsequence.
-#ifdef DEBUG
-                        cout << " -> smaller than lo=" << lo << endl;
-#endif
+                for (int idx1 : currColorIndices) {
+                    if (idx1 < lo) {
                         continue;
                     }
 
-                    if (cIdx > hi) {
-                        // Since indices are in order, if we go beyond the index of the
-                        // righmost group, all the indices from now on will be out of
-                        // the current subsequence.
-#ifdef DEBUG
-                        cout << " -> larger than hi=" << hi << endl;
-#endif
+                    if (idx1 > hi) {
                         break;
                     }
 
-                    if (cIdx == hi) {
-                        // Case "erase subsequence before last group + erase last group".
+                    if (idx1 == hi) {
+                        // Case 1: erase subsequence before last group + erase last group.
+                        //  (www)-X
+
 #ifdef DEBUG
-                        cout << " -> equals hi=" << hi << endl;
-                        cout << "   Solutions" << endl;
-                        cout << "    R Y B G W" << endl;
+                        cout << " Case 1: ";
+                        cout << boardToString(_board, lo, idx1 - 1) << " + ";
+                        cout << boardToString(_board, idx1, idx1) << endl;
 #endif
-                        for (vector<int> sol : mat[lo][hi - 1]) {
-                            // For each solution of the subsequence before the last group...
-                            sol[hiGroup.c] += 3 - hiGroup.n;
+
+                        set<vector<int>> solutionsBeforeMatch1 = mat[lo][hi - 1];
+                        if (solutionsBeforeMatch1.empty()) {
+                            // Cannot solve this subsequence.
+                            // Since index 1 is at the highest possible position, it makes no sense
+                            // to continue. We break here.
 #ifdef DEBUG
-                            cout << "    ";
-                            for (auto& v : sol) {
-                                cout << v << " ";
-                            }
+                            cout << "  " << boardToString(_board, lo, idx1 - 1) << " has no solution" << endl;
 #endif
-                            if (validateSolution(sol, _hand)) {
-                                mat[hi][lo].insert(sol);
-#ifdef DEBUG
-                                cout << " -> V";
-#endif
-                            }
-#ifdef DEBUG
-                            cout << endl;
-#endif
+                            break;
                         }
-                    } else {
-                        // Case "erase the last group using a group of the same color in
-                        // the middle of the current subsequence".
+
+                        for (vector<int> sol : solutionsBeforeMatch1) {
+                            sol[hiGroup.c] += 3 - hiGroup.n;
+                            if (validateSolution(sol, _hand)) {
+                                mat[lo][hi].insert(sol);
+                            }
+                        }
+
 #ifdef DEBUG
-                        cout << " -> mid-match" << endl;
-                        cout << "   Solutions" << endl;
-                        cout << "    R Y B G W" << endl;
+                        cout << "  Valid solutions:" << endl;
+                        cout << "   R Y B G W" << endl;
+                        for (vector<int> sol : mat[lo][hi]) {
+                            cout << "   " << solutionToString(sol) << endl;
+                        }
 #endif
-                        set<vector<int>>& solutionsBeforeLeftMatch = mat[lo][cIdx - 1];
+                    } else {
+                        // lo <= idx1 < hi
+                        // Case 2: erase the last group using a group of the same color in
+                        // the middle of the current subsequence.
+                    
+                        set<vector<int>> solutionsBeforeMatch1;
+                    
+                        // Early check that the sequence before index 1 can be solved. If it cannot, neither
+                        // will the entire sequence in [lo, hi].
+                        if (idx1 == lo) {
+                            // Nothing to solve before the math at index 1.
+                            solutionsBeforeMatch1.insert(vector<int>(5, 0));
+                        } else {
+                            solutionsBeforeMatch1 = mat[lo][idx1 - 1];
+                            if (solutionsBeforeMatch1.empty()) {
+#ifdef DEBUG
+                                cout << " Case 2: " << boardToString(_board, lo, idx1 - 1) << " + ";
+                                cout << boardToString(_board, idx1, hi) << endl;
+                                cout << "  No solution for " << boardToString(_board, lo, idx1 - 1) << endl;
+#endif
+                                continue;
+                            }        
+                        }
+
+                        // TODO: Use iterators instead of idx1 and idx2!
+                        for (int idx2 : currColorIndices) {
+                            if (idx2 <= idx1) {
+                                continue;
+                            }
+
+                            if (idx2 > hi) {
+                                break;
+                            }
+
+#ifdef DEBUG
+                            cout << " idx1=" << idx1 << " idx2=" << idx2 << endl;
+#endif
+
+                            set<vector<int>> solutionsMidLeft;
+                            set<vector<int>> solutionsMidRight;
+                            int numColorsToAdd = 0;     // amount of extra balls to erase the matching groups at the edge
+
+                            if (idx2 == hi) {
+                                // lo <= idx1 < idx2==hi
+                                // Case 2a: combine two groups
+                                //  (www)-X(yyy)X
+                                                        
+                                solutionsMidRight.insert(vector<int>(5, 0));
+                                solutionsMidLeft = mat[idx1 + 1][hi - 1];
+                                if (solutionsMidLeft.empty()) {
+                                    // If a subsequence is not elidable, neither will the entire lo-hi sequence.
+                                    // Go to next index 2.
+#ifdef DEBUG
+                                    cout << " Case 2a: " << boardToString(_board, lo, idx1 - 1) << " + ";
+                                    cout << boardToString(_board, idx1, idx1) << " + ";
+                                    cout << boardToString(_board, idx1 + 1, hi - 1) + " + ";
+                                    cout << boardToString(_board, hi, hi) << endl;
+                                    cout << "  No solution for " << boardToString(_board, idx1 + 1, hi - 1) << endl;
+#endif
+                                    continue;
+                                }
                         
-                        // Two groups with the same color cannot be consecutive, otherwise
-                        // they would already be the same group.
-                        set<vector<int>>& solutionsBetweenMatches = mat[cIdx + 1][hi - 1];
-                        
-                        // After removing the sequence in-between, how many balls do I need
-                        // to erase the extremes of the same color?
-                        int numCurrColorToAdd = 3 - min(3, _board[cIdx].n + hiGroup.n); 
-                        
-                        // Put together each "between" solution with each "before" solution.
-                        // The "between" solution is guaranteed to exist, but if we are matching
-                        // the first group of the subsequence (at lo), there will be nothing
-                        // to the left of the match.
-                        // To solve this, we merge "before" solutions to "between" and not viceversa.
-                        for (vector<int> solBetween : solutionsBetweenMatches) {
-                            for (vector<int> solBefore : solutionsBeforeLeftMatch) {
-                                for (int k = 0; k < solBetween.size(); ++k) {
-                                    solBetween[k] += solBefore[k];
+                                // After removing the sequence in-between, how many balls do I need
+                                // to erase the extremes of the same color?
+                                numColorsToAdd = 3 - min(3, _board[idx1].n + hiGroup.n); 
+                            } else {
+                                // lo < idx1 < idx2 < hi
+                                // Case 2b: combine 3 groups
+                                //  (www)-X(yyy)X(zzz)X
+                                
+                                Group g1 = _board[idx1];
+                                Group g2 = _board[idx2];
+                                Group g3 = _board[hi];
+                                bool isCase2b1 = g1.n == 1 && g2.n == 1 && g3.n == 1; // case 2b1: (www)-1X(yyy)1X(zzz)1X
+                                bool isCase2b2 = g1.n == 2 && g2.n == 1 && g3.n == 1; // case 2b2: (www)-2X(yyy)1X(zzz)1X
+                                bool isCase2b3 = g1.n == 1 && g2.n == 1 && g3.n == 2; // case 2b3: (www)-1X(yyy)1X(zzz)2X    
+                                bool canSolve = isCase2b1 || isCase2b2 || isCase2b3;
+                                if (!canSolve) {
+                                    // Any of the remaining 5 dispositions: case already covered in 2a. Go to next index 2.
+                                    continue;
+                                }
+
+                                solutionsMidLeft = solutionsMidLeft = mat[idx1 + 1][idx2 - 1];
+                                solutionsMidRight = solutionsMidRight = mat[idx2 + 1][hi - 1];
+
+                                canSolve = !(solutionsMidLeft.empty() || solutionsMidRight.empty());
+                                if (!canSolve) {
+                                    // Go to next index 2.
+#ifdef DEBUG
+                                    cout << " Case 2b: ";
+                                    cout << boardToString(_board, lo, idx1 - 1) << " + ";
+                                    cout << boardToString(_board, idx1, idx1) << " + ";
+                                    cout << boardToString(_board, idx1 + 1, idx2 - 1) + " + ";
+                                    cout << boardToString(_board, idx2, idx2) + " + ";
+                                    cout << boardToString(_board, idx2 + 1, hi - 1) + " + ";
+                                    cout << boardToString(_board, hi, hi) << endl;
+                                    cout << "  No solution for some of the middle sequences" << endl;
+#endif
+                                    continue;
                                 }
                             }
 
-                            solBetween[hiGroup.c] += numCurrColorToAdd;
-#ifdef DEBUG
-                            cout << "    ";
-                            for (auto& v : solBetween) {
-                                cout << v << " ";
+                            for (vector<int> solBefore : solutionsBeforeMatch1) {
+                                for (vector<int> solMidLeft : solutionsMidLeft) {
+                                    for (vector<int> solMidRight : solutionsMidRight) {
+                                        vector<int> sol(5, 0);
+                                        for (int k = 0; k < 5; ++k) {
+                                            sol[k] += solMidRight[k];
+                                            sol[k] += solBefore[k];
+                                            sol[k] += solMidLeft[k];
+                                        }
+                                        sol[hiGroup.c] += numColorsToAdd;
+                                        if (validateSolution(sol, _hand)) {
+                                            mat[lo][hi].insert(sol);
+                                        }
+                                    }
+                                }
                             }
-#endif
 
-                            if (validateSolution(solBetween, _hand)) {
-                                mat[hi][lo].insert(solBetween);
 #ifdef DEBUG
-                                cout << " -> V";
-#endif
+                            cout << " Case 2b: idx1=" << idx1 << ", idx2=" << idx2 << endl;
+                            cout << "  Valid solutions:" << endl;
+                            cout << "   R Y B G W" << endl;
+                            for (vector<int> sol : mat[lo][hi]) {
+                                cout << "   " << solutionToString(sol) << endl;
                             }
-#ifdef DEBUG
-                            cout << endl;
 #endif
                         }
                     }
@@ -332,16 +414,32 @@ public:
             }
         }
 
+#ifdef DEBUG
+        cout << endl;
+#endif
+
         // After filling the matrix, the top-right cell contains the solution
         // for the entire sequence.
         if (mat[0][_board.size() - 1].empty()) {
+#ifdef DEBUG
+            cout << "No solutions" << endl;
+#endif
             return -1;
         }
 
+#ifdef DEBUG
+        cout << "--- Solutions ---" << endl;
+        cout << " R Y B G W   tot" << endl;
+#endif
         int res = numeric_limits<int>::max();
         for (vector<int> sol : mat[0][_board.size() - 1]) {
             // Count the value of each solution;
             int solValue = accumulate(sol.begin(), sol.end(), 0);
+      
+#ifdef DEBUG
+            cout << " " << solutionToString(sol) << "   " << solValue << endl;
+#endif
+
             res = min(res, solValue);
         }
 
