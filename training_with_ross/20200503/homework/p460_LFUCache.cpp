@@ -1,6 +1,6 @@
 #include <iostream>
 #include <list>
-#include <map>
+#include <unordered_map>
 #include <utility>
 
 #define DBG 0
@@ -46,7 +46,7 @@ private:
     list<Entry> _l;
 
     // Maps a key to a pointer in the list.
-    map<int, entryIt> _cache;
+    unordered_map<int, entryIt> _cache;
 };
 
 // Update the position of the element pointed by the provided iterator
@@ -98,7 +98,7 @@ int LFUCache::get(int key) {
     cout << " _count=" << _count << endl;
 #endif
 
-    map<int, entryIt>::iterator mIt = _cache.find(key);
+    unordered_map<int, entryIt>::iterator mIt = _cache.find(key);
     if (mIt == _cache.end()) {
        // Cache miss.
 #ifdef DBG
@@ -140,7 +140,7 @@ void LFUCache::put(int key, int value) {
         return;
     }
 
-    map<int, entryIt>::iterator mIt = _cache.find(key);
+    unordered_map<int, entryIt>::iterator mIt = _cache.find(key);
     if (mIt != _cache.end()) {
 
 #ifdef DBG
